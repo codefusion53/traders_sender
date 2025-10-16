@@ -9,7 +9,16 @@ Endpoints:
     POST     /api/upload            - Upload file to server's storage
     GET      /api/health            - Health check endpoint
     GET      /api/list-files        - List all stored files
-    GET      /api/file/<type>/<path> - Download specific file by type and path
+    GET      /api/file/<path>        - Download specific file (requires API key)
+
+API Key Authentication:
+    The /api/file/ endpoint requires API key authentication.s
+    Pass API key via:
+        - Header: X-API-Key
+        - Query parameter: api_key
+    
+    Set the API key via environment variable: API_KEY
+    Default: 'your-secret-api-key-here'
 """
 
 import os
@@ -25,6 +34,7 @@ app = Flask(__name__)
 BASE_FOLDER = Path('/tools/trader_sender/data/')
 ALLOWED_EXTENSIONS = None  # None = allow all file types
 MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
+API_KEY = os.environ.get('API_KEY', '')  # Change this or set via environment variable
 
 app.config['BASE_FOLDER'] = BASE_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
@@ -50,6 +60,64 @@ def ensure_directory_exists(directory: Path) -> bool:
     except Exception as e:
         print(f"Error: Could not create directory '{directory}': {str(e)}")
         return False
+
+
+def delete_directory_files(directory: Path) -> tuple[bool, int]:
+    """
+    Delete all files in the specified directory (not subdirectories).
+    
+    Args:
+        directory: Path to the directory
+        
+    Returns:
+        Tuple of (success: bool, files_deleted: int)
+    """
+    try:
+        if not directory.exists() or not directory.is_dir():
+            return True, 0
+        
+        files_deleted = 0
+        for item in directory.iterdir():
+            if item.is_file():
+                item.unlink()
+                files_deleted += 1
+        
+        return True, files_deleted
+    except Exception as e:
+        print(f"Error: Could not delete files in directory '{directory}': {str(e)}")
+        return False, 0
+
+
+def check_api_key():
+    """
+    Check if the API key in the request is valid.
+    Accepts API key via:
+        - Header: X-API-Key
+        - Query parameter: api_key
+    
+    Returns:
+        Tuple of (is_valid: bool, error_response: dict or None)
+    """
+    # Check header first
+    api_key = request.headers.get('X-API-Key')
+    
+    # If not in header, check query parameter
+    if not api_key:
+        api_key = request.args.get('api_key')
+    
+    if not api_key:
+        return False, {
+            'success': False,
+            'error': 'API key required. Provide via X-API-Key header or api_key query parameter'
+        }
+    
+    if api_key != API_KEY:
+        return False, {
+            'success': False,
+            'error': 'Invalid API key'
+        }
+    
+    return True, None
 
 
 # Note: Removed external download/upload functions
@@ -140,7 +208,7 @@ def download_file():
                 'filename': f.name,
                 'size_bytes': f.stat().st_size,
                 'modified': datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
-                'download_url': f'/api/file/downloads/{today}/{f.name}'
+                'download_url': f'/api/file/{today}/{f.name}'
             }
             for f in sorted(all_files, key=lambda p: p.stat().st_mtime, reverse=True)
         ]
@@ -168,6 +236,7 @@ def upload_file():
     Form data:
         file: File (required)
         folder: Target folder - 'uploads' or 'downloads' (optional, default: 'uploads')
+        clear_existing: 'true' to delete all files in today's directory before upload (optional, default: 'false')
     
     Returns:
         JSON response with upload status
@@ -210,6 +279,19 @@ def upload_file():
         # Ensure timestamp directory exists
         ensure_directory_exists(timestamp_dir)
         
+        # Check if we should clear existing files (controlled by form parameter)
+        clear_existing = request.form.get('clear_existing', 'false').lower() == 'true'
+        files_deleted = 0
+        
+        if clear_existing:
+            # Delete all existing files in today's directory before uploading
+            success, files_deleted = delete_directory_files(timestamp_dir)
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to clear existing files in directory'
+                }), 500
+        
         # Secure the filename
         filename = secure_filename(file.filename)
         
@@ -224,7 +306,8 @@ def upload_file():
             'directory': timestamp,
             'file_path': str(file_path),
             'folder': target_folder,
-            'size_bytes': file_path.stat().st_size
+            'size_bytes': file_path.stat().st_size,
+            'files_deleted': files_deleted
         }
         
         return jsonify(response_data), 200
@@ -297,18 +380,26 @@ def list_files():
         }), 500
 
 
-@app.route('/api/file/<file_type>/<path:filepath>', methods=['GET'])
-def get_file(file_type, filepath):
+@app.route('/api/file/<path:filepath>', methods=['GET'])
+def get_file(filepath):
     """
     Download a specific file.
     
     Path parameters:
-        file_type: 'downloads' or 'uploads'
         filepath: Path to the file (can include directory, e.g., '10-15-25/traders.csv')
+    
+    Query parameters or Headers:
+        api_key: API key for authentication (query parameter)
+        X-API-Key: API key for authentication (header)
     
     Returns:
         File download
     """
+    # Check API key
+    is_valid, error_response = check_api_key()
+    if not is_valid:
+        return jsonify(error_response), 401
+    
     try:
         # Secure the filepath components
         filepath_parts = filepath.split('/')
@@ -316,15 +407,7 @@ def get_file(file_type, filepath):
         secure_filepath = '/'.join(secure_parts)
         
         # Determine directory based on file_type
-        if file_type == 'downloads':
-            base_directory = BASE_FOLDER
-        elif file_type == 'uploads':
-            base_directory = BASE_FOLDER
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid file_type. Must be "downloads" or "uploads"'
-            }), 400
+        base_directory = BASE_FOLDER
         
         file_path = base_directory / secure_filepath
         
@@ -336,7 +419,7 @@ def get_file(file_type, filepath):
                 'success': False,
                 'error': 'Invalid file path'
             }), 400
-        
+
         # Check if file exists
         if not file_path.exists() or not file_path.is_file():
             return jsonify({
@@ -421,10 +504,12 @@ Endpoints:
   GET/POST /api/download              - Download files from today's timestamp directory
   POST     /api/upload                - Upload file to server's storage
   GET      /api/list-files            - List all stored files
-  GET      /api/file/<type>/<path>    - Download specific file
+  GET      /api/file/<path>           - Download specific file (requires API key)
 
 Upload folder:   {BASE_FOLDER.absolute()}
 Download folder: {BASE_FOLDER.absolute()}
+
+API Key: {'SET' if API_KEY != 'your-secret-api-key-here' else 'USING DEFAULT (CHANGE THIS!)'}
 {'='*60}
     """)
     

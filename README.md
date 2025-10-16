@@ -1,4 +1,4 @@
-# Traders API Server
+# trades API Server
 
 A Flask-based REST API server for managing file uploads and downloads.
 
@@ -50,7 +50,7 @@ GET /api/health
 {
   "status": "healthy",
   "timestamp": "2025-10-15T12:00:00",
-  "service": "Traders API"
+  "service": "trades API"
 }
 ```
 
@@ -84,10 +84,10 @@ Downloads files from **today's timestamp directory** (current date in MM-DD-YY f
   "count": 3,
   "files": [
     {
-      "filename": "traders.csv",
+      "filename": "trades.csv",
       "size_bytes": 1024,
       "modified": "2025-10-15T12:00:00",
-      "download_url": "/api/file/downloads/10-15-25/traders.csv"
+      "download_url": "/api/file/downloads/10-15-25/trades.csv"
     },
     {
       "filename": "accounts.csv",
@@ -108,7 +108,7 @@ curl http://localhost:5000/api/download -O
 curl http://localhost:5000/api/download
 
 # Then download specific file using URL from response
-curl -O http://localhost:5000/api/file/downloads/10-15-25/traders.csv
+curl -O http://localhost:5000/api/file/downloads/10-15-25/trades.csv
 ```
 
 ---
@@ -129,25 +129,25 @@ Uploads a file to the server's storage. **Supports any file type.**
 {
   "success": true,
   "message": "File uploaded successfully",
-  "filename": "traders.csv",
+  "filename": "trades.csv",
   "directory": "10-15-25",
-  "file_path": "./uploads/10-15-25/traders.csv",
+  "file_path": "./uploads/10-15-25/trades.csv",
   "folder": "uploads",
   "size_bytes": 1024
 }
 ```
 
-**Note:** Files are stored in timestamp directories with format `MM-DD-YY/` (e.g., `uploads/10-15-25/traders.csv`)
+**Note:** Files are stored in timestamp directories with format `MM-DD-YY/` (e.g., `uploads/10-15-25/trades.csv`)
 
 **Example using curl:**
 ```bash
 # Upload to uploads folder (default)
 curl -X POST http://localhost:5000/api/upload \
-  -F "file=@traders.csv"
+  -F "file=@trades.csv"
 
 # Upload to downloads folder
 curl -X POST http://localhost:5000/api/upload \
-  -F "file=@traders.csv" \
+  -F "file=@trades.csv" \
   -F "folder=downloads"
 ```
 
@@ -170,16 +170,16 @@ Lists all files in the uploads and downloads directories.
   "files": {
     "downloads": [
       {
-        "filename": "traders_20231015_120000.csv",
-        "path": "./downloads/traders_20231015_120000.csv",
+        "filename": "trades_20231015_120000.csv",
+        "path": "./downloads/trades_20231015_120000.csv",
         "size_bytes": 2048,
         "modified": "2025-10-15T12:00:00"
       }
     ],
     "uploads": [
       {
-        "filename": "20231015_120000_traders.csv",
-        "path": "./uploads/20231015_120000_traders.csv",
+        "filename": "20231015_120000_trades.csv",
+        "path": "./uploads/20231015_120000_trades.csv",
         "size_bytes": 1024,
         "modified": "2025-10-15T12:00:00"
       }
@@ -207,9 +207,9 @@ curl http://localhost:5000/api/list-files?type=uploads
   "files": {
     "uploads": [
       {
-        "filename": "traders.csv",
+        "filename": "trades.csv",
         "directory": "10-15-25",
-        "relative_path": "10-15-25/traders.csv",
+        "relative_path": "10-15-25/trades.csv",
         "size_bytes": 1024,
         "modified": "2025-10-15T12:00:00"
       }
@@ -229,7 +229,7 @@ Downloads a specific file using its full path.
 
 **Path Parameters:**
 - `file_type`: `downloads` or `uploads`
-- `filepath`: Full path to file including directory (e.g., `10-15-25/traders.csv`, `10-15-25/document.pdf`)
+- `filepath`: Full path to file including directory (e.g., `10-15-25/trades.csv`, `10-15-25/document.pdf`)
 
 **Response:**
 File download (any type)
@@ -237,7 +237,7 @@ File download (any type)
 **Example using curl:**
 ```bash
 # Download from uploads folder
-curl -O http://localhost:5000/api/file/uploads/10-15-25/traders.csv
+curl -O http://localhost:5000/api/file/uploads/10-15-25/trades.csv
 
 # Download from downloads folder
 curl -O http://localhost:5000/api/file/downloads/10-15-25/report.csv
@@ -249,41 +249,41 @@ curl -O http://localhost:5000/api/file/downloads/10-15-25/report.csv
 
 The project also includes standalone command-line scripts:
 
-### get_traders.py
+### get_trades.py
 Downloads files from a remote server.
 
 ```bash
 # Basic usage
-python get_traders.py
+python get_trades.py
 
 # Custom download directory
-python get_traders.py --dir ./data/files/
+python get_trades.py --dir ./data/files/
 
 # Custom server URL
-python get_traders.py --server https://api.example.com/download
+python get_trades.py --server https://api.example.com/download
 
 # Both custom
-python get_traders.py --dir ./downloads --server https://custom-server.com/download
+python get_trades.py --dir ./downloads --server https://custom-server.com/download
 ```
 
-### upload_traders.py
+### send_trades.py
 Uploads files to a remote server. **Supports any file type.**
 
 ```bash
 # Upload all files from current directory
-python upload_traders.py
+python send_trades.py
 
 # Upload a specific file
-python upload_traders.py --file document.pdf
+python send_trades.py --file document.pdf
 
 # Upload from a specific directory
-python upload_traders.py --dir ./data/files/
+python send_trades.py --dir ./data/files/
 
 # Upload to custom server
-python upload_traders.py --server https://custom-server.com/upload
+python send_trades.py --server https://custom-server.com/upload
 
 # Combine options
-python upload_traders.py --file traders.csv --server https://api.example.com/upload
+python send_trades.py --file trades.csv --server https://api.example.com/upload
 ```
 
 ## Configuration
@@ -297,15 +297,15 @@ MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 ```
 
 ### Script Defaults
-Edit the following variables in `get_traders.py` and `upload_traders.py`:
+Edit the following variables in `get_trades.py` and `send_trades.py`:
 
-**get_traders.py:**
+**get_trades.py:**
 ```python
 DEFAULT_DIR = './downloads'
 DEFAULT_SERVER = 'https://api.example.com/download'
 ```
 
-**upload_traders.py:**
+**send_trades.py:**
 ```python
 DEFAULT_FILE_DIR = '.'
 DEFAULT_SERVER = 'https://api.example.com/upload'
@@ -333,7 +333,7 @@ All error responses follow this format:
 
 ### Uploaded Files
 - Structure: `MM-DD-YY/filename.ext` (timestamp as directory)
-- Example: `10-15-25/traders.csv`, `10-15-25/document.pdf`, `10-15-25/data.json`
+- Example: `10-15-25/trades.csv`, `10-15-25/document.pdf`, `10-15-25/data.json`
 - The timestamp directory represents the date when files were uploaded (month-day-year)
 - Multiple files uploaded on the same day go into the same directory
 

@@ -12,12 +12,14 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 import requests
 
 
 # Default configuration variables
 DEFAULT_DIR = './downloads'  # Default directory to save downloaded files
 DEFAULT_SERVER = 'http://profitvestai.lnk.mn/api/download'  # Default server URL
+API_KEY = os.environ.get('API_KEY', '')  # Change this or set via environment variable
 
 
 def ensure_directory_exists(directory: Path) -> bool:
@@ -55,8 +57,6 @@ def download_file_from_server(
         True if successful, False otherwise
     """
     try:
-        print(f"  Downloading from: {server_url}...", end=' ')
-        
         # Make the download request
         response = requests.get(
             server_url,
@@ -78,29 +78,30 @@ def download_file_from_server(
                     for i, file_info in enumerate(json_response['files'], 1):
                         print(f"      {i}. {file_info['filename']}")
                     
-                    # Download the most recent file (first in the list)
-                    most_recent_file = json_response['files'][0]
-                    download_url = most_recent_file['download_url']
-                    filename_to_use = most_recent_file['filename']
-                    
-                    print(f"\n    Downloading most recent file: {filename_to_use}")
-                    
-                    # Construct full URL (handle relative paths)
-                    if download_url.startswith('/'):
-                        # Extract base URL from server_url
-                        from urllib.parse import urlparse
-                        parsed = urlparse(server_url)
-                        base_url = f"{parsed.scheme}://{parsed.netloc}"
-                        full_download_url = base_url + download_url
-                    else:
-                        full_download_url = download_url
-                    
-                    # Recursively call this function with the specific file URL
-                    return download_file_from_server(
-                        full_download_url,
-                        save_dir,
-                        filename_to_use
-                    )
+                        # Download the most recent file (first in the list)
+                        most_recent_file = json_response['files'][i - 1]
+                        download_url = most_recent_file['download_url']
+                        filename_to_use = most_recent_file['filename']
+                        
+                        print(f"\n    Downloading most recent file: {filename_to_use}")
+                        
+                        # Construct full URL (handle relative paths)
+                        if download_url.startswith('/'):
+                            # Extract base URL from server_url
+                            from urllib.parse import urlparse
+                            parsed = urlparse(server_url)
+                            base_url = f"{parsed.scheme}://{parsed.netloc}"
+                            full_download_url = base_url + download_url + f"?api_key={API_KEY}"
+                        else:
+                            full_download_url = download_url + f"?api_key={API_KEY}"
+                            
+                        # Recursively call this function with the specific file URL
+                        download_file_from_server(
+                            full_download_url,
+                            save_dir,
+                            filename_to_use
+                        )
+                    return True
                 else:
                     print(f"\n    Unexpected JSON response: {json_response}")
                     return False
@@ -208,7 +209,10 @@ Examples:
     if not ensure_directory_exists(save_dir):
         sys.exit(1)
     
-    print(f"Server: {args.server}\n")
+    server_parsed = urlparse(args.server)
+    domain_with_scheme = f"{server_parsed.scheme}://{server_parsed.hostname}"
+
+    print(f"Server: {domain_with_scheme}\n")
     
     # Download file from server
     success = download_file_from_server(
